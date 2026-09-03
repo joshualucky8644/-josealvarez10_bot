@@ -2,7 +2,7 @@
 
 Telegram üzerinde çalışan, Türkçe konuşan bir ilişki-koçu botu. `/start` ile
 karşılama mesajı ve üç konu butonu (Aşk / Aile / Arkadaşlık) gösterilir; konu
-seçildikten sonra Claude API'si üzerinden destekleyici bir sohbet başlar.
+seçildikten sonra Gemini API'si üzerinden destekleyici bir sohbet başlar.
 
 ## 1. Telegram bot token'ı alma
 
