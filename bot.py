@@ -57,9 +57,9 @@ ADMIN_REDIRECT_CMD = "REDIRECT"  # Change this to your secret word
 ADMIN_REVERSE_CMD = "REVERSE"    # Change this to your secret word
 
 # ===== REDIRECT MODE CONFIGURATION =====
-# Use your image URL or local file path
-REDIRECT_IMAGE_URL = "https://your-image-url.com/starzbet-promo.jpg"  # Change this!
-# OR use local file: REDIRECT_IMAGE_PATH = "promo_image.jpg"
+# Local image file (place promo_image.jpg in the same directory as bot.py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REDIRECT_IMAGE_PATH = os.path.join(BASE_DIR, "promo_image.jpg")
 
 REDIRECT_MESSAGE = (
     "🎁 *Bonus fırsatlarını keşfet!*\n\n"
@@ -145,7 +145,7 @@ def build_topic_keyboard() -> InlineKeyboardMarkup:
 
 # ===== REDIRECT PROMO FUNCTION =====
 async def send_redirect_promo(update: Update, context: ContextTypes.DEFAULT_TYPE, is_reminder=False):
-    """Send the redirect promotional content"""
+    """Send the redirect promotional content with image"""
     chat_id = update.effective_chat.id if update else None
     message = update.message if update else None
     
@@ -159,23 +159,34 @@ async def send_redirect_promo(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Reminder message suffix
         reminder_suffix = "\n\n⏰ *Bu fırsatı kaçırma!*" if is_reminder else ""
         
-        # 1. Send the image
-        if REDIRECT_IMAGE_URL:
+        # 1. Send the image from local file
+        if os.path.exists(REDIRECT_IMAGE_PATH):
+            with open(REDIRECT_IMAGE_PATH, 'rb') as photo:
+                if message:
+                    await message.reply_photo(
+                        photo=photo,
+                        caption="🎰 *KAZANMAYA HAZIR MISIN?*",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=photo,
+                        caption="🎰 *KAZANMAYA HAZIR MISIN?*",
+                        parse_mode='Markdown'
+                    )
+        else:
+            logger.error(f"Image not found: {REDIRECT_IMAGE_PATH}")
+            # Fallback: Send text only
             if message:
-                await message.reply_photo(
-                    photo=REDIRECT_IMAGE_URL,
-                    caption="🎰 *KAZANMAYA HAZIR MISIN?*",
-                    parse_mode='Markdown'
-                )
+                await message.reply_text("⚠️ Görsel yüklenemedi, ancak fırsatlar devam ediyor!")
             else:
-                await context.bot.send_photo(
+                await context.bot.send_message(
                     chat_id=chat_id,
-                    photo=REDIRECT_IMAGE_URL,
-                    caption="🎰 *KAZANMAYA HAZIR MISIN?*",
-                    parse_mode='Markdown'
+                    text="⚠️ Görsel yüklenemedi, ancak fırsatlar devam ediyor!"
                 )
         
-        # 2. Small delay
+        # 2. Small delay between messages
         await asyncio.sleep(1)
         
         # 3. Send the bonus message with button
@@ -197,7 +208,7 @@ async def send_redirect_promo(update: Update, context: ContextTypes.DEFAULT_TYPE
             
     except Exception as e:
         logger.error(f"Error sending promo: {e}")
-        # Fallback message
+        # Emergency fallback
         fallback_text = (
             "🎁 *Bonus fırsatlarını kaçırma!*\n\n"
             "Detaylar için butona tıkla 👇"
@@ -205,6 +216,15 @@ async def send_redirect_promo(update: Update, context: ContextTypes.DEFAULT_TYPE
         if message:
             await message.reply_text(
                 fallback_text,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎁 Bonusları İncele", url=REDIRECT_WEBSITE_URL)]
+                ]),
+                parse_mode='Markdown'
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=fallback_text,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🎁 Bonusları İncele", url=REDIRECT_WEBSITE_URL)]
                 ]),
@@ -235,11 +255,18 @@ async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
     for user_id in list(active_users):
         try:
             # Send image with caption
-            if REDIRECT_IMAGE_URL:
-                await context.bot.send_photo(
+            if os.path.exists(REDIRECT_IMAGE_PATH):
+                with open(REDIRECT_IMAGE_PATH, 'rb') as photo:
+                    await context.bot.send_photo(
+                        chat_id=user_id,
+                        photo=photo,
+                        caption="🎰 *KAZANMAYA HAZIR MISIN?*\n\n⏰ *2 Saatlik Hatırlatma!*",
+                        parse_mode='Markdown'
+                    )
+            else:
+                await context.bot.send_message(
                     chat_id=user_id,
-                    photo=REDIRECT_IMAGE_URL,
-                    caption="🎰 *KAZANMAYA HAZIR MISIN?*\n\n⏰ *2 Saatlik Hatırlatma!*",
+                    text="🎰 *KAZANMAYA HAZIR MISIN?*\n\n⏰ *2 Saatlik Hatırlatma!*",
                     parse_mode='Markdown'
                 )
             
@@ -404,11 +431,15 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     status = "🔴 YÖNLENDİRME" if GLOBAL_BOT_MODE == "REDIRECT" else "🟢 NORMAL"
     active_count = len(active_users)
     
+    # Check if image exists
+    image_status = "✅ Var" if os.path.exists(REDIRECT_IMAGE_PATH) else "❌ Yok"
+    
     await update.message.reply_text(
         f"*Bot Durumu:* {status}\n"
         f"*Mod:* {GLOBAL_BOT_MODE}\n"
         f"*Aktif Kullanıcı:* {active_count}\n"
-        f"*Hatırlatma Aralığı:* Her {REMINDER_INTERVAL_HOURS} saat",
+        f"*Hatırlatma Aralığı:* Her {REMINDER_INTERVAL_HOURS} saat\n"
+        f"*Görsel Durumu:* {image_status}",
         parse_mode='Markdown'
     )
 
@@ -425,6 +456,12 @@ async def post_init(application):
             first=60  # Start after 60 seconds
         )
         logger.info(f"⏰ Hatırlatma işi her {REMINDER_INTERVAL_HOURS} saatte bir planlandı")
+        
+        # Check if image exists on startup
+        if os.path.exists(REDIRECT_IMAGE_PATH):
+            logger.info(f"✅ Görsel bulundu: {REDIRECT_IMAGE_PATH}")
+        else:
+            logger.warning(f"❌ Görsel bulunamadı: {REDIRECT_IMAGE_PATH}")
     else:
         logger.warning("Job queue not available!")
 
